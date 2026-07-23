@@ -43,7 +43,7 @@ export function aisleDirectionArrows(aisle: AisleBand, loadType: 'single' | 'dou
   }
 
   const direction = normalize({ x: end.x - start.x, y: end.y - start.y });
-  const arrowWidth = aisle.width * 0.5;
+  const arrowWidth = aisle.width * 0.2;
 
   if (loadType === 'single') {
     // L'unique flèche est centrée sur le milieu de la voie : la plafonner à 80% de
