@@ -1802,6 +1802,14 @@ export default function App() {
       return;
     }
 
+    const invalidParamEntry = Object.entries(params).find(
+      ([key, value]) => key !== 'pmrRatio' && key !== 'angleDeg' && (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+    );
+    if (invalidParamEntry) {
+      alert(`Le paramètre "${invalidParamEntry[0]}" doit être un nombre positif — vérifie les valeurs saisies.`);
+      return;
+    }
+
     const ring = [...boundary, boundary[0]].map((p) => [p.lng, p.lat]);
     const kinksResult = kinks(turfPolygon([ring]));
     if (kinksResult.features.length > 0) {
@@ -1942,6 +1950,7 @@ Run: `npm run dev`
 7. Cliquer "Sauvegarder le projet" → vérifier le téléchargement du JSON, puis "Charger un projet" avec ce même fichier → vérifier que le contour et les paramètres sont restaurés.
 8. Tracer volontairement un contour en croix (auto-intersectant) et cliquer "Générer le plan" → vérifier le message d'erreur bloquant plutôt qu'un plan vide.
 9. Poser un point d'accès en dehors du contour et cliquer "Générer le plan" → vérifier le message d'erreur demandant de le repositionner.
+10. Vider un champ de paramètre (ex. largeur de voie) et cliquer "Générer le plan" → vérifier le message d'erreur nommant le paramètre invalide plutôt qu'un résultat vide silencieux.
 
 - [ ] **Step 4: Commit**
 
