@@ -1,122 +1,138 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+// src/App.tsx
+import { useMemo } from 'react';
+import { polygon as turfPolygon, point as turfPoint } from '@turf/helpers';
+import kinks from '@turf/kinks';
+import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
+import { MapView } from './components/MapView';
+import { ParamsPanel } from './components/ParamsPanel';
+import { ResultsPanel } from './components/ResultsPanel';
+import { useProjectStore } from './store/projectStore';
+import { makeProjection } from './geometry/projection';
+import { solveParkingConfigurations } from './geometry/solver';
+import { exportConfigToDxf } from './export/dxfExporter';
+import { deserializeProject, serializeProject } from './store/projectFile';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+function downloadFile(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-export default App
+export default function App() {
+  const boundary = useProjectStore((s) => s.boundary);
+  const exclusions = useProjectStore((s) => s.exclusions);
+  const accessPoints = useProjectStore((s) => s.accessPoints);
+  const params = useProjectStore((s) => s.params);
+  const configs = useProjectStore((s) => s.configs);
+  const selectedConfigIndex = useProjectStore((s) => s.selectedConfigIndex);
+  const setConfigs = useProjectStore((s) => s.setConfigs);
+  const loadProject = useProjectStore((s) => s.loadProject);
+
+  const projection = useMemo(() => {
+    if (boundary.length === 0) return null;
+    return makeProjection(boundary[0]);
+  }, [boundary]);
+
+  const handleGenerate = () => {
+    if (!projection || boundary.length < 3) {
+      alert('Trace un contour de terrain avant de générer un plan.');
+      return;
+    }
+
+    const invalidParamEntry = Object.entries(params).find(
+      ([key, value]) => key !== 'pmrRatio' && key !== 'angleDeg' && (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+    );
+    if (invalidParamEntry) {
+      alert(`Le paramètre "${invalidParamEntry[0]}" doit être un nombre positif — vérifie les valeurs saisies.`);
+      return;
+    }
+
+    const ring = [...boundary, boundary[0]].map((p) => [p.lng, p.lat]);
+    const kinksResult = kinks(turfPolygon([ring]));
+    if (kinksResult.features.length > 0) {
+      alert('Le contour tracé se croise lui-même — corrige le tracé avant de générer un plan.');
+      return;
+    }
+
+    const boundaryPolygon = turfPolygon([ring]);
+    const outsideAccessPoints = accessPoints.filter(
+      (p) => !booleanPointInPolygon(turfPoint([p.lng, p.lat]), boundaryPolygon)
+    );
+    if (outsideAccessPoints.length > 0) {
+      alert(`${outsideAccessPoints.length} point(s) d'accès sont en dehors du contour tracé — déplace-les sur le contour avant de générer un plan.`);
+      return;
+    }
+
+    const localBoundary = boundary.map((p) => projection.toLocal(p));
+    const localExclusions = exclusions.map((ring) => ring.map((p) => projection.toLocal(p)));
+    const localAccessPoints = accessPoints.map((p) => projection.toLocal(p));
+
+    const results = solveParkingConfigurations({
+      boundary: localBoundary,
+      exclusions: localExclusions,
+      accessPoints: localAccessPoints,
+      baseParams: params,
+    });
+
+    if (results.length === 0) {
+      alert("Aucune configuration valide n'a pu être générée sur ce terrain.");
+      return;
+    }
+
+    setConfigs(results);
+  };
+
+  const handleExportDxf = () => {
+    if (!projection || configs.length === 0) return;
+    const localBoundary = boundary.map((p) => projection.toLocal(p));
+    const localExclusions = exclusions.map((ring) => ring.map((p) => projection.toLocal(p)));
+    const dxf = exportConfigToDxf(configs[selectedConfigIndex], localBoundary, localExclusions);
+    downloadFile('plan-parking.dxf', dxf, 'application/dxf');
+  };
+
+  const handleExportProject = () => {
+    const json = serializeProject({ boundary, exclusions, accessPoints, params });
+    downloadFile('projet-parking.json', json, 'application/json');
+  };
+
+  const handleImportProject = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = deserializeProject(reader.result as string);
+      loadProject(data);
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="app-layout">
+      <div className="map-container">
+        <MapView />
+      </div>
+      <div className="side-panel">
+        <ParamsPanel />
+        <div className="actions">
+          <button onClick={handleGenerate}>Générer le plan</button>
+          <button onClick={handleExportDxf} disabled={configs.length === 0}>
+            Exporter en DXF
+          </button>
+          <button onClick={handleExportProject}>Sauvegarder le projet</button>
+          <label className="import-button">
+            Charger un projet
+            <input
+              type="file"
+              accept="application/json"
+              onChange={(e) => e.target.files && handleImportProject(e.target.files[0])}
+            />
+          </label>
+        </div>
+        <ResultsPanel />
+      </div>
+    </div>
+  );
+}
