@@ -149,6 +149,8 @@ export function MapView({ planConfig, projection }: MapViewProps) {
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         attribution="Tiles &copy; Esri"
+        maxZoom={22}
+        maxNativeZoom={19}
       />
       <SearchBar />
       <DrawingLayer />
