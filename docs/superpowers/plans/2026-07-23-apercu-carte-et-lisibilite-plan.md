@@ -610,11 +610,19 @@ const boundary = [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 20 }, { x: 0, y: 
 const exclusions: { x: number; y: number }[][] = [];
 
 function findLayerOfPolylineContaining(dxf: string, snippet: string): string | undefined {
-  const entityBlocks = dxf.split('0\nLWPOLYLINE');
+  // .slice(1) : le premier fragment (avant la toute première entité LWPOLYLINE)
+  // contient l'en-tête DXF et les tables/blocs générés par dxf-writer (dont le bloc
+  // *Model_Space, dont le point de base est toujours 0,0,0) — l'inclure risquerait
+  // de faire correspondre un snippet à ce contenu générique plutôt qu'à une vraie
+  // entité de place. On continue aussi la boucle si un bloc contient le snippet mais
+  // n'a pas de tag de calque exploitable, plutôt que de retourner undefined immédiatement.
+  const entityBlocks = dxf.split('0\nLWPOLYLINE').slice(1);
   for (const block of entityBlocks) {
     if (block.includes(snippet)) {
       const match = block.match(/\n8\n([A-Z_]+)\n/);
-      return match?.[1];
+      if (match) {
+        return match[1];
+      }
     }
   }
   return undefined;
@@ -646,8 +654,13 @@ describe('exportConfigToDxf', () => {
 
   it('places the standard stall on PLACES and the PMR stall on PLACES_PMR', () => {
     const dxf = exportConfigToDxf(sampleConfig, boundary, exclusions);
-    expect(findLayerOfPolylineContaining(dxf, '10\n0\n20\n0')).toBe('PLACES');
-    expect(findLayerOfPolylineContaining(dxf, '10\n2.5\n20\n0')).toBe('PLACES_PMR');
+    // On cible un coin propre à chaque place plutôt que (0,0), qui coïncide avec le
+    // point de base (0,0,0) du bloc *Model_Space généré par dxf-writer avant toute
+    // entité — voir la note dans findLayerOfPolylineContaining ci-dessus.
+    // s1 (standard) a le coin (0,5), non partagé avec s2 ; s2 (PMR) a le coin (5,0),
+    // non partagé avec s1.
+    expect(findLayerOfPolylineContaining(dxf, '10\n0\n20\n5')).toBe('PLACES');
+    expect(findLayerOfPolylineContaining(dxf, '10\n5\n20\n0')).toBe('PLACES_PMR');
   });
 });
 ```
