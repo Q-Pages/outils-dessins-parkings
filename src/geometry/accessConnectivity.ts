@@ -11,28 +11,35 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
     return aisles;
   }
 
-  return aisles.map((aisle) => {
-    let bestAccessPoint: Point | null = null;
-    let bestDistance = Infinity;
-    let bestEndIndex: 0 | 1 = 0;
+  // Connecte chaque point d'accès à l'extrémité de voie la plus proche sur tout le
+  // réseau (plutôt que chaque voie à son point d'accès le plus proche), pour garantir
+  // qu'aucun point d'accès ne reste orphelin même si plusieurs voies préféreraient le
+  // même point d'accès.
+  const updated: AisleBand[] = aisles.map((aisle) => ({
+    ...aisle,
+    centerline: [...aisle.centerline] as [Point, Point],
+  }));
 
-    for (const access of accessPoints) {
+  for (const access of accessPoints) {
+    let bestAisleIndex = -1;
+    let bestEndIndex: 0 | 1 = 0;
+    let bestDistance = Infinity;
+
+    updated.forEach((aisle, aisleIndex) => {
       for (const endIndex of [0, 1] as const) {
         const d = distance(aisle.centerline[endIndex], access);
         if (d < bestDistance) {
           bestDistance = d;
-          bestAccessPoint = access;
+          bestAisleIndex = aisleIndex;
           bestEndIndex = endIndex;
         }
       }
-    }
+    });
 
-    if (!bestAccessPoint) {
-      return aisle;
+    if (bestAisleIndex !== -1) {
+      updated[bestAisleIndex].centerline[bestEndIndex] = access;
     }
+  }
 
-    const newCenterline: [Point, Point] = [...aisle.centerline] as [Point, Point];
-    newCenterline[bestEndIndex] = bestAccessPoint;
-    return { ...aisle, centerline: newCenterline };
-  });
+  return updated;
 }
