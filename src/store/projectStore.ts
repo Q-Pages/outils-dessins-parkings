@@ -12,8 +12,8 @@ interface ProjectState {
   selectedConfigIndex: number;
 
   setBoundary: (boundary: LatLng[]) => void;
-  addExclusion: (exclusion: LatLng[]) => void;
-  addAccessPoint: (point: LatLng) => void;
+  setExclusions: (exclusions: LatLng[][]) => void;
+  setAccessPoints: (points: LatLng[]) => void;
   setParams: (params: Partial<SolverParams>) => void;
   setConfigs: (configs: ParkingConfig[]) => void;
   selectConfig: (index: number) => void;
@@ -29,8 +29,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
   selectedConfigIndex: 0,
 
   setBoundary: (boundary) => set({ boundary }),
-  addExclusion: (exclusion) => set((state) => ({ exclusions: [...state.exclusions, exclusion] })),
-  addAccessPoint: (point) => set((state) => ({ accessPoints: [...state.accessPoints, point] })),
+  setExclusions: (exclusions) => set({ exclusions }),
+  setAccessPoints: (points) => set({ accessPoints: points }),
   setParams: (params) => set((state) => ({ params: { ...state.params, ...params } })),
   setConfigs: (configs) => set({ configs, selectedConfigIndex: 0 }),
   selectConfig: (index) => set({ selectedConfigIndex: index }),
