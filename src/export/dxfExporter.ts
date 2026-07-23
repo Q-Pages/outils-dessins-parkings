@@ -9,6 +9,7 @@ function ringToPolylinePoints(ring: Point[]): [number, number][] {
 
 export function exportConfigToDxf(config: ParkingConfig, boundary: Point[], exclusions: Point[][]): string {
   const d = new Drawing();
+  d.setUnits('Meters');
 
   d.addLayer('CONTOUR', Drawing.ACI.WHITE, 'CONTINUOUS');
   d.setActiveLayer('CONTOUR');
