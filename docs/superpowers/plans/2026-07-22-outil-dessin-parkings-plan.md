@@ -741,6 +741,20 @@ describe('connectAislesToAccessPoints', () => {
     expect(result[1].centerline[0]).toEqual({ x: 50, y: 50 });
     expect(result[1].centerline[1]).toEqual({ x: 100, y: 2 });
   });
+
+  it('does not let a later access point steal an endpoint already claimed by an earlier one', () => {
+    const aisles: AisleBand[] = [{ centerline: [{ x: 0, y: 0 }, { x: 1, y: 0 }], width: 5 }];
+    const accessPoints = [
+      { x: 0, y: 5 },
+      { x: 0, y: 5.001 },
+    ];
+
+    const result = connectAislesToAccessPoints(aisles, accessPoints);
+
+    const endpoints = result[0].centerline;
+    expect(endpoints).toContainEqual({ x: 0, y: 5 });
+    expect(endpoints).toContainEqual({ x: 0, y: 5.001 });
+  });
 });
 ```
 
@@ -776,6 +790,11 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
     centerline: [...aisle.centerline] as [Point, Point],
   }));
 
+  // Suit les extrémités déjà attribuées pour qu'un point d'accès ultérieur ne puisse
+  // pas "voler" l'extrémité d'un point d'accès précédent (ex. deux points d'accès très
+  // proches l'un de l'autre visant la même extrémité de voie la plus proche).
+  const claimed = new Set<string>();
+
   for (const access of accessPoints) {
     let bestAisleIndex = -1;
     let bestEndIndex: 0 | 1 = 0;
@@ -783,6 +802,9 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
 
     updated.forEach((aisle, aisleIndex) => {
       for (const endIndex of [0, 1] as const) {
+        if (claimed.has(`${aisleIndex}-${endIndex}`)) {
+          continue;
+        }
         const d = distance(aisle.centerline[endIndex], access);
         if (d < bestDistance) {
           bestDistance = d;
@@ -794,6 +816,7 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
 
     if (bestAisleIndex !== -1) {
       updated[bestAisleIndex].centerline[bestEndIndex] = access;
+      claimed.add(`${bestAisleIndex}-${bestEndIndex}`);
     }
   }
 
@@ -801,10 +824,12 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
 }
 ```
 
+Limite V1 acceptée et documentée : s'il y a plus de points d'accès que d'extrémités de voie disponibles (`accessPoints.length > 2 * aisles.length`), les points d'accès excédentaires ne sont raccordés à rien — il n'existe physiquement plus d'extrémité libre à leur attribuer. Ce n'est pas un bug mais une limite structurelle du réseau de voies généré.
+
 - [ ] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `npx vitest run src/geometry/accessConnectivity.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
