@@ -30,4 +30,11 @@ describe('projectFile', () => {
   it('throws a clear error when boundary is not an array', () => {
     expect(() => deserializeProject(JSON.stringify({ boundary: 'not an array', exclusions: [], accessPoints: [], params: DEFAULT_SOLVER_PARAMS }))).toThrow();
   });
+
+  it('throws a clear error when a required params field is missing', () => {
+    const { angleDeg: _angleDeg, ...paramsWithoutAngle } = DEFAULT_SOLVER_PARAMS;
+    expect(() =>
+      deserializeProject(JSON.stringify({ boundary: [], exclusions: [], accessPoints: [], params: paramsWithoutAngle }))
+    ).toThrow();
+  });
 });
