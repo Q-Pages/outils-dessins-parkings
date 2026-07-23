@@ -479,7 +479,7 @@ S'appuie sur `stallDividerLines` (Task 1). `dxfExporter.ts` existe depuis le pla
 
 ```typescript
 // src/components/PlanOverlay.tsx
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Polygon, Polyline } from 'react-leaflet';
 import { LatLng, Point } from '../geometry/projection';
 import { ParkingConfig } from '../geometry/types';
@@ -502,7 +502,10 @@ export function PlanOverlay({ config, projection }: PlanOverlayProps) {
       return [ll.lat, ll.lng];
     });
 
-  const dividerLines = stallDividerLines(config.stalls);
+  // stallDividerLines est O(n²) (comparaison de chaque place avec toutes les autres) —
+  // mémoïsé pour ne pas le recalculer à chaque rendu (pan/zoom de la carte), seulement
+  // quand la liste de places change réellement.
+  const dividerLines = useMemo(() => stallDividerLines(config.stalls), [config.stalls]);
   const pmrStalls = config.stalls.filter((stall) => stall.isPmr);
 
   return (
