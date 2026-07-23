@@ -1146,6 +1146,15 @@ export function serializeProject(project: ProjectData): string {
   return JSON.stringify(serialized, null, 2);
 }
 
+const REQUIRED_NUMERIC_PARAM_KEYS: Array<keyof SerializableParams> = [
+  'standardStallWidth',
+  'standardStallLength',
+  'pmrStallWidth',
+  'pmrStallLength',
+  'aisleWidthSingleLoaded',
+  'aisleWidthDoubleLoaded',
+];
+
 export function deserializeProject(json: string): ProjectData {
   const parsed = JSON.parse(json) as Partial<SerializedProject>;
 
@@ -1158,8 +1167,19 @@ export function deserializeProject(json: string): ProjectData {
   if (!Array.isArray(parsed.accessPoints)) {
     throw new Error('Fichier de projet invalide : "accessPoints" est manquant ou n\'est pas un tableau.');
   }
-  if (!parsed.params || typeof parsed.params.standardStallWidth !== 'number') {
-    throw new Error('Fichier de projet invalide : "params" est manquant ou incomplet.');
+  // Note V1 : le contenu des tableaux (ex. chaque point a bien lat/lng) n'est pas
+  // validé en détail — acceptable pour un outil interne mono-utilisateur ; à revoir
+  // si l'outil est un jour partagé plus largement avec des fichiers moins fiables.
+  if (!parsed.params) {
+    throw new Error('Fichier de projet invalide : "params" est manquant.');
+  }
+  for (const key of REQUIRED_NUMERIC_PARAM_KEYS) {
+    if (typeof parsed.params[key] !== 'number') {
+      throw new Error(`Fichier de projet invalide : "params.${key}" est manquant ou n'est pas un nombre.`);
+    }
+  }
+  if (parsed.params.angleDeg !== 90 && parsed.params.angleDeg !== 60 && parsed.params.angleDeg !== 45) {
+    throw new Error('Fichier de projet invalide : "params.angleDeg" doit être 90, 60 ou 45.');
   }
 
   return {
@@ -1171,7 +1191,20 @@ export function deserializeProject(json: string): ProjectData {
 }
 ```
 
-**Correction post-revue de code :** la version initiale ne validait rien après `JSON.parse` — un fichier JSON syntaxiquement valide mais de forme incorrecte (`"{}"`, `params` manquant, `boundary` qui n'est pas un tableau...) passait le cast TypeScript `as SerializedProject` sans erreur et produisait un `ProjectData` cassé, qui aurait planté plus tard, loin du point d'import, dans un endroit difficile à diagnostiquer (rendu carte, solveur...). La version ci-dessus valide la forme minimale et lève une erreur claire et immédiate si le fichier est invalide.
+**Correction post-revue de code (2e passe) :** la validation ne vérifiait que `standardStallWidth`, laissant passer un fichier avec les 6 autres champs numériques de `params` (ou `angleDeg`) manquants/invalides — exactement la même catégorie de bug que la correction visait à éliminer, juste déplacée sur un champ frère. La version ci-dessus vérifie tous les champs numériques requis et la valeur autorisée de `angleDeg`.
+
+Ajouter ce test supplémentaire dans `src/store/projectFile.test.ts` :
+
+```typescript
+  it('throws a clear error when a required params field is missing', () => {
+    const { angleDeg: _angleDeg, ...paramsWithoutAngle } = DEFAULT_SOLVER_PARAMS;
+    expect(() =>
+      deserializeProject(JSON.stringify({ boundary: [], exclusions: [], accessPoints: [], params: paramsWithoutAngle }))
+    ).toThrow();
+  });
+```
+
+**Correction post-revue de code (1re passe) :** la toute première version ne validait rien après `JSON.parse` — un fichier JSON syntaxiquement valide mais de forme incorrecte (`"{}"`, `params` manquant, `boundary` qui n'est pas un tableau...) passait le cast TypeScript `as SerializedProject` sans erreur et produisait un `ProjectData` cassé, qui aurait planté plus tard, loin du point d'import, dans un endroit difficile à diagnostiquer (rendu carte, solveur...). La version ci-dessus valide la forme minimale et lève une erreur claire et immédiate si le fichier est invalide.
 
 Ajouter ces deux tests supplémentaires dans `src/store/projectFile.test.ts` (après le test existant `'throws a clear error on invalid JSON'`) :
 
@@ -1188,7 +1221,7 @@ Ajouter ces deux tests supplémentaires dans `src/store/projectFile.test.ts` (ap
 - [ ] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `npx vitest run src/store/projectFile.test.ts`
-Expected: PASS (4 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 
