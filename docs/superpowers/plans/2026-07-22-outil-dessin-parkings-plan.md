@@ -1147,7 +1147,21 @@ export function serializeProject(project: ProjectData): string {
 }
 
 export function deserializeProject(json: string): ProjectData {
-  const parsed = JSON.parse(json) as SerializedProject;
+  const parsed = JSON.parse(json) as Partial<SerializedProject>;
+
+  if (!Array.isArray(parsed.boundary)) {
+    throw new Error('Fichier de projet invalide : "boundary" est manquant ou n\'est pas un tableau.');
+  }
+  if (!Array.isArray(parsed.exclusions)) {
+    throw new Error('Fichier de projet invalide : "exclusions" est manquant ou n\'est pas un tableau.');
+  }
+  if (!Array.isArray(parsed.accessPoints)) {
+    throw new Error('Fichier de projet invalide : "accessPoints" est manquant ou n\'est pas un tableau.');
+  }
+  if (!parsed.params || typeof parsed.params.standardStallWidth !== 'number') {
+    throw new Error('Fichier de projet invalide : "params" est manquant ou incomplet.');
+  }
+
   return {
     boundary: parsed.boundary,
     exclusions: parsed.exclusions,
@@ -1157,10 +1171,24 @@ export function deserializeProject(json: string): ProjectData {
 }
 ```
 
+**Correction post-revue de code :** la version initiale ne validait rien après `JSON.parse` — un fichier JSON syntaxiquement valide mais de forme incorrecte (`"{}"`, `params` manquant, `boundary` qui n'est pas un tableau...) passait le cast TypeScript `as SerializedProject` sans erreur et produisait un `ProjectData` cassé, qui aurait planté plus tard, loin du point d'import, dans un endroit difficile à diagnostiquer (rendu carte, solveur...). La version ci-dessus valide la forme minimale et lève une erreur claire et immédiate si le fichier est invalide.
+
+Ajouter ces deux tests supplémentaires dans `src/store/projectFile.test.ts` (après le test existant `'throws a clear error on invalid JSON'`) :
+
+```typescript
+  it('throws a clear error when the JSON is well-formed but has the wrong shape (empty object)', () => {
+    expect(() => deserializeProject('{}')).toThrow();
+  });
+
+  it('throws a clear error when boundary is not an array', () => {
+    expect(() => deserializeProject(JSON.stringify({ boundary: 'not an array', exclusions: [], accessPoints: [], params: DEFAULT_SOLVER_PARAMS }))).toThrow();
+  });
+```
+
 - [ ] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `npx vitest run src/store/projectFile.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
