@@ -6,6 +6,8 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet-draw';
 import { useProjectStore } from '../store/projectStore';
+import { PlanOverlay, PlanProjection } from './PlanOverlay';
+import { ParkingConfig } from '../geometry/types';
 
 const COORDS_REGEX = /^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/;
 
@@ -125,7 +127,12 @@ function DrawingLayer() {
   return null;
 }
 
-export function MapView() {
+interface MapViewProps {
+  planConfig?: ParkingConfig;
+  projection?: PlanProjection | null;
+}
+
+export function MapView({ planConfig, projection }: MapViewProps) {
   return (
     <MapContainer center={[46.6, 2.5]} zoom={6} style={{ height: '100%', width: '100%' }}>
       <TileLayer
@@ -134,6 +141,7 @@ export function MapView() {
       />
       <SearchBar />
       <DrawingLayer />
+      {planConfig && projection && <PlanOverlay config={planConfig} projection={projection} />}
     </MapContainer>
   );
 }

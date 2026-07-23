@@ -6,6 +6,7 @@ import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
 import { MapView } from './components/MapView';
 import { ParamsPanel } from './components/ParamsPanel';
 import { ResultsPanel } from './components/ResultsPanel';
+import { Legend } from './components/Legend';
 import { useProjectStore } from './store/projectStore';
 import { makeProjection } from './geometry/projection';
 import { solveParkingConfigurations } from './geometry/solver';
@@ -129,7 +130,7 @@ export default function App() {
   return (
     <div className="app-layout">
       <div className="map-container">
-        <MapView />
+        <MapView planConfig={configs[selectedConfigIndex]} projection={projection} />
       </div>
       <div className="side-panel">
         <ParamsPanel />
@@ -149,6 +150,7 @@ export default function App() {
           </label>
         </div>
         <ResultsPanel />
+        <Legend />
       </div>
     </div>
   );
