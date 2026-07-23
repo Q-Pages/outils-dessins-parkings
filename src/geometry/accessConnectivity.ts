@@ -20,6 +20,11 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
     centerline: [...aisle.centerline] as [Point, Point],
   }));
 
+  // Suit les extrémités déjà attribuées pour qu'un point d'accès ultérieur ne puisse
+  // pas "voler" l'extrémité d'un point d'accès précédent (ex. deux points d'accès très
+  // proches l'un de l'autre visant la même extrémité de voie la plus proche).
+  const claimed = new Set<string>();
+
   for (const access of accessPoints) {
     let bestAisleIndex = -1;
     let bestEndIndex: 0 | 1 = 0;
@@ -27,6 +32,9 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
 
     updated.forEach((aisle, aisleIndex) => {
       for (const endIndex of [0, 1] as const) {
+        if (claimed.has(`${aisleIndex}-${endIndex}`)) {
+          continue;
+        }
         const d = distance(aisle.centerline[endIndex], access);
         if (d < bestDistance) {
           bestDistance = d;
@@ -38,6 +46,7 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
 
     if (bestAisleIndex !== -1) {
       updated[bestAisleIndex].centerline[bestEndIndex] = access;
+      claimed.add(`${bestAisleIndex}-${bestEndIndex}`);
     }
   }
 

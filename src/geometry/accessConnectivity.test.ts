@@ -42,4 +42,18 @@ describe('connectAislesToAccessPoints', () => {
     expect(result[1].centerline[0]).toEqual({ x: 50, y: 50 });
     expect(result[1].centerline[1]).toEqual({ x: 100, y: 2 });
   });
+
+  it('does not let a later access point steal an endpoint already claimed by an earlier one', () => {
+    const aisles: AisleBand[] = [{ centerline: [{ x: 0, y: 0 }, { x: 1, y: 0 }], width: 5 }];
+    const accessPoints = [
+      { x: 0, y: 5 },
+      { x: 0, y: 5.001 },
+    ];
+
+    const result = connectAislesToAccessPoints(aisles, accessPoints);
+
+    const endpoints = result[0].centerline;
+    expect(endpoints).toContainEqual({ x: 0, y: 5 });
+    expect(endpoints).toContainEqual({ x: 0, y: 5.001 });
+  });
 });
