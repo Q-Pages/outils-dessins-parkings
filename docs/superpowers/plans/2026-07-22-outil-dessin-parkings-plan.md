@@ -362,6 +362,46 @@ export function stallFitsUsableArea(stallRing: Ring, boundary: Ring, exclusions:
 }
 ```
 
+**Correction post-revue de code (Task 9) :** `stallFitsUsableArea` reconstruit un polygone Turf pour tout le contour et chaque exclusion à chaque appel. C'était toléré tant que c'était un coût interne, mais Task 9 en fait le chemin d'exécution direct du bouton "Générer le plan" côté UI (12 appels à `packRows`, chacun appelant potentiellement `stallFitsUsableArea` des centaines de fois). Ajouter au fichier `containment.ts`, en plus du code ci-dessus (ne rien supprimer, `stallFitsUsableArea` reste tel quel pour ne pas casser les tests de Task 4) :
+
+```typescript
+export interface PreparedUsableArea {
+  boundaryPoly: ReturnType<typeof toTurfPolygon>;
+  exclusionPolys: ReturnType<typeof toTurfPolygon>[];
+}
+
+export function prepareUsableArea(boundary: Ring, exclusions: Ring[]): PreparedUsableArea {
+  return {
+    boundaryPoly: toTurfPolygon(boundary),
+    exclusionPolys: exclusions.map(toTurfPolygon),
+  };
+}
+
+export function stallFitsPreparedArea(stallRing: Ring, prepared: PreparedUsableArea): boolean {
+  const stallPoly = toTurfPolygon(stallRing);
+
+  if (!booleanContains(prepared.boundaryPoly, stallPoly)) {
+    return false;
+  }
+
+  for (const exclusionPoly of prepared.exclusionPolys) {
+    if (booleanIntersects(stallPoly, exclusionPoly)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+```
+
+Puis dans `src/geometry/rowPacking.ts`, remplacer l'import et l'appel :
+
+```typescript
+import { prepareUsableArea, stallFitsPreparedArea } from './containment';
+```
+
+Construire `const prepared = prepareUsableArea(rotatedBoundary, rotatedExclusions);` une seule fois, juste après le calcul de `bbox` (avant la boucle `while (y + moduleDepth <= ...)`), puis remplacer l'appel `stallFitsUsableArea(localCorners, rotatedBoundary, rotatedExclusions)` par `stallFitsPreparedArea(localCorners, prepared)`. Résultat : le contour et les exclusions ne sont plus reconstruits qu'une fois par appel à `packRows` (donc 12 fois par génération), au lieu d'une fois par place candidate testée (potentiellement des milliers de fois).
+
 - [ ] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `npx vitest run src/geometry/containment.test.ts`
@@ -889,6 +929,47 @@ describe('solveParkingConfigurations', () => {
     expect(best.pmrCount).toBe(expectedPmr);
     expect(best.totalCount).toBe(best.standardCount + best.pmrCount);
   });
+
+  it('returns an empty array when the boundary is too small to fit any stall', () => {
+    const tinyBoundary: Ring = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+    ];
+    const configs = solveParkingConfigurations({
+      boundary: tinyBoundary,
+      exclusions: [],
+      accessPoints: [],
+      baseParams: DEFAULT_SOLVER_PARAMS,
+    });
+    expect(configs).toEqual([]);
+  });
+
+  it('returns an empty array when an exclusion zone covers the entire boundary', () => {
+    const fullExclusion: Ring = [...rectangle];
+    const configs = solveParkingConfigurations({
+      boundary: rectangle,
+      exclusions: [fullExclusion],
+      accessPoints: [],
+      baseParams: DEFAULT_SOLVER_PARAMS,
+    });
+    expect(configs).toEqual([]);
+  });
+
+  it('records plausible angleDeg/loadType/rowDirectionDeg fields on every returned config', () => {
+    const configs = solveParkingConfigurations({
+      boundary: rectangle,
+      exclusions: [],
+      accessPoints: [{ x: 0, y: 5 }],
+      baseParams: DEFAULT_SOLVER_PARAMS,
+    });
+    for (const config of configs) {
+      expect([90, 60, 45]).toContain(config.angleDeg);
+      expect(['single', 'double']).toContain(config.loadType);
+      expect(typeof config.rowDirectionDeg).toBe('number');
+    }
+  });
 });
 ```
 
@@ -977,7 +1058,7 @@ export function solveParkingConfigurations(input: SolveInput): ParkingConfig[] {
 - [ ] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `npx vitest run src/geometry/solver.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 5: Commit**
 
