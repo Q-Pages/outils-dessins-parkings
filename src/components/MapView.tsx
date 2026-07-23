@@ -9,6 +9,17 @@ import { useProjectStore } from '../store/projectStore';
 import { PlanOverlay, PlanProjection } from './PlanOverlay';
 import { ParkingConfig } from '../geometry/types';
 
+L.drawLocal.draw.toolbar.buttons.polygon = "Tracer le contour ou une zone d'exclusion";
+L.drawLocal.draw.toolbar.buttons.marker = "Poser un point d'accès";
+L.drawLocal.draw.toolbar.finish.title = 'Terminer le tracé';
+L.drawLocal.draw.toolbar.finish.text = 'Terminer';
+L.drawLocal.draw.toolbar.undo.title = 'Supprimer le dernier point';
+L.drawLocal.draw.toolbar.undo.text = 'Supprimer le dernier point';
+L.drawLocal.draw.toolbar.actions.title = 'Annuler le tracé';
+L.drawLocal.draw.toolbar.actions.text = 'Annuler';
+L.drawLocal.edit.toolbar.buttons.edit = 'Modifier un tracé';
+L.drawLocal.edit.toolbar.buttons.remove = 'Supprimer un tracé';
+
 const COORDS_REGEX = /^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/;
 
 async function searchAddress(query: string): Promise<{ lat: number; lng: number } | null> {
