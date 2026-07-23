@@ -93,6 +93,33 @@ describe('aisleDirectionArrows', () => {
     expect(arrows[0][1].y).toBeCloseTo(2.5, 6);
     expect(arrows[0][2].y).toBeCloseTo(-2.5, 6);
   });
+
+  it('returns no arrows for a zero-length aisle instead of producing NaN', () => {
+    const degenerateAisle: AisleBand = { centerline: [{ x: 5, y: 5 }, { x: 5, y: 5 }], width: 5 };
+    expect(aisleDirectionArrows(degenerateAisle, 'single')).toEqual([]);
+    expect(aisleDirectionArrows(degenerateAisle, 'double')).toEqual([]);
+  });
+
+  it('clamps arrow length so it does not exceed the aisle for a short, wide aisle', () => {
+    const shortAisle: AisleBand = { centerline: [{ x: 0, y: 0 }, { x: 2, y: 0 }], width: 6 };
+    // Without clamping, arrowLength would be 6 (arrowWidth=width*0.5=3, arrowLength=arrowWidth*2=6) on a 2m-long aisle.
+    // Clamped: arrowLength = min(6, 2 * 0.8) = 1.6, so the tip is at most 0.8m from
+    // the midpoint (1, 0) in either direction — well within the aisle's own extent.
+    const arrows = aisleDirectionArrows(shortAisle, 'single');
+    expect(arrows[0][0].x).toBeLessThanOrEqual(2);
+    expect(arrows[0][0].x).toBeGreaterThanOrEqual(0);
+  });
+
+  it('produces a correctly oriented arrow for a diagonal aisle', () => {
+    const diagonalAisle: AisleBand = { centerline: [{ x: 0, y: 0 }, { x: 10, y: 10 }], width: 4 };
+    const arrows = aisleDirectionArrows(diagonalAisle, 'single');
+    // direction = (1/sqrt(2), 1/sqrt(2)), mid = (5, 5), arrowWidth = 2, arrowLength = min(4, 8) = 4
+    const invSqrt2 = 1 / Math.sqrt(2);
+    const expectedTipX = 5 + invSqrt2 * 2;
+    const expectedTipY = 5 + invSqrt2 * 2;
+    expect(arrows[0][0].x).toBeCloseTo(expectedTipX, 6);
+    expect(arrows[0][0].y).toBeCloseTo(expectedTipY, 6);
+  });
 });
 ```
 
@@ -141,9 +168,18 @@ function makeArrow(center: Point, direction: Point, arrowLength: number, arrowWi
 export function aisleDirectionArrows(aisle: AisleBand, loadType: 'single' | 'double'): Ring[] {
   const [start, end] = aisle.centerline;
   const length = distance(start, end);
+
+  // Une voie de longueur nulle n'a pas de sens de circulation à représenter —
+  // éviter la division par zéro dans normalize() plutôt que propager des NaN.
+  if (length === 0) {
+    return [];
+  }
+
   const direction = normalize({ x: end.x - start.x, y: end.y - start.y });
   const arrowWidth = aisle.width * 0.5;
-  const arrowLength = arrowWidth * 2;
+  // Plafonner la longueur de flèche à 80% de la longueur de la voie pour éviter
+  // qu'elle ne déborde visuellement d'une voie très courte.
+  const arrowLength = Math.min(arrowWidth * 2, length * 0.8);
 
   if (loadType === 'single') {
     const mid: Point = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
@@ -170,7 +206,7 @@ export function aisleDirectionArrows(aisle: AisleBand, loadType: 'single' | 'dou
 - [ ] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `npx vitest run src/geometry/aisleRendering.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (6 tests)
 
 - [ ] **Step 5: Commit**
 
