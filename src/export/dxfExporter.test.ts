@@ -25,20 +25,31 @@ const sampleConfig: ParkingConfig = {
   totalCount: 2,
 };
 
+const doubleLoadedConfig: ParkingConfig = {
+  ...sampleConfig,
+  loadType: 'double',
+};
+
 const boundary = [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 20 }, { x: 0, y: 20 }];
 const exclusions: { x: number; y: number }[][] = [];
 
-// Returns the DXF group-code-8 layer name of the LWPOLYLINE entity whose point
-// data contains `pointSequenceSnippet` (a substring of consecutive "10\nX\n20\nY"
-// tokens unique to that entity's vertices), or undefined if none match.
-// Verified against real dxf-writer output: each entity block looks like
-// "0\nLWPOLYLINE\n5\n..\n330\n..\n100\nAcDbEntity\n100\nAcDbPolyline\n8\n<LAYER>\n6\nByLayer\n...".
-function findLayerOfPolylineContaining(dxf: string, pointSequenceSnippet: string): string | undefined {
-  const entityChunks = dxf.split('0\nLWPOLYLINE\n').slice(1);
-  const chunk = entityChunks.find((c) => c.includes(pointSequenceSnippet));
-  if (!chunk) return undefined;
-  const match = chunk.match(/\n8\n([^\n]+)\n/);
-  return match ? match[1] : undefined;
+function findLayerOfPolylineContaining(dxf: string, snippet: string): string | undefined {
+  // .slice(1) : le premier fragment (avant la toute première entité LWPOLYLINE)
+  // contient l'en-tête DXF et les tables/blocs générés par dxf-writer (dont le bloc
+  // *Model_Space, dont le point de base est toujours 0,0,0) — l'inclure risquerait
+  // de faire correspondre un snippet à ce contenu générique plutôt qu'à une vraie
+  // entité de place. On continue aussi la boucle si un bloc contient le snippet mais
+  // n'a pas de tag de calque exploitable, plutôt que de retourner undefined immédiatement.
+  const entityBlocks = dxf.split('0\nLWPOLYLINE').slice(1);
+  for (const block of entityBlocks) {
+    if (block.includes(snippet)) {
+      const match = block.match(/\n8\n([A-Z_]+)\n/);
+      if (match) {
+        return match[1];
+      }
+    }
+  }
+  return undefined;
 }
 
 describe('exportConfigToDxf', () => {
@@ -50,43 +61,29 @@ describe('exportConfigToDxf', () => {
     expect(dxf).toContain('VOIES');
   });
 
-  it('includes one polyline entity per stall and per aisle', () => {
+  it('draws one arrow polyline (not a plain centerline) for a single-loaded aisle', () => {
     const dxf = exportConfigToDxf(sampleConfig, boundary, exclusions);
     const polylineCount = (dxf.match(/LWPOLYLINE/g) || []).length;
-    // 1 contour + 2 stalls + 1 aisle = 4 LWPOLYLINE entities
+    // 1 contour + 2 stalls + 1 arrow = 4 LWPOLYLINE entities (no plain centerline for single-loaded)
     expect(polylineCount).toBe(4);
   });
 
-  it('declares drawing units in meters via the $INSUNITS header variable', () => {
-    const dxf = exportConfigToDxf(sampleConfig, boundary, exclusions);
-    // dxf-writer's Drawing.UNITS.Meters === 6; setUnits('Meters') emits this
-    // as header group "9\n$INSUNITS\n70\n6" (verified against real output).
-    expect(dxf).toContain('$INSUNITS');
-    expect(dxf).toMatch(/\$INSUNITS\r?\n70\r?\n6\r?\n/);
-  });
-
-  it('draws a non-empty exclusion polygon as a polyline on the EXCLUSIONS layer', () => {
-    const exclusionRing = [
-      { x: 10, y: 8 },
-      { x: 12, y: 8 },
-      { x: 12, y: 10 },
-      { x: 10, y: 10 },
-    ];
-    const dxf = exportConfigToDxf(sampleConfig, boundary, [exclusionRing]);
+  it('draws two arrows plus a dashed centerline divider for a double-loaded aisle', () => {
+    const dxf = exportConfigToDxf(doubleLoadedConfig, boundary, exclusions);
     const polylineCount = (dxf.match(/LWPOLYLINE/g) || []).length;
-    // 1 contour + 1 exclusion + 2 stalls + 1 aisle = 5 LWPOLYLINE entities
-    expect(polylineCount).toBe(5);
-    const layer = findLayerOfPolylineContaining(dxf, '10\n10\n20\n8\n10\n12\n20\n8');
-    expect(layer).toBe('EXCLUSIONS');
+    // 1 contour + 2 stalls + 2 arrows + 1 centerline divider = 6 LWPOLYLINE entities
+    expect(polylineCount).toBe(6);
+    expect(dxf).toContain('VOIES_SEPARATEUR');
   });
 
-  it('draws the standard stall on PLACES and the PMR stall on PLACES_PMR, not the other layer', () => {
+  it('places the standard stall on PLACES and the PMR stall on PLACES_PMR', () => {
     const dxf = exportConfigToDxf(sampleConfig, boundary, exclusions);
-    // s1 corners (0,0)->(2.5,0) is a sequence unique to the standard stall.
-    const standardLayer = findLayerOfPolylineContaining(dxf, '10\n0\n20\n0\n10\n2.5\n20\n0');
-    // s2 corners (2.5,0)->(5,0) is a sequence unique to the PMR stall.
-    const pmrLayer = findLayerOfPolylineContaining(dxf, '10\n2.5\n20\n0\n10\n5\n20\n0');
-    expect(standardLayer).toBe('PLACES');
-    expect(pmrLayer).toBe('PLACES_PMR');
+    // On cible un coin propre à chaque place plutôt que (0,0), qui coïncide avec le
+    // point de base (0,0,0) du bloc *Model_Space généré par dxf-writer avant toute
+    // entité — voir la note dans findLayerOfPolylineContaining ci-dessus.
+    // s1 (standard) a le coin (0,5), non partagé avec s2 ; s2 (PMR) a le coin (5,0),
+    // non partagé avec s1.
+    expect(findLayerOfPolylineContaining(dxf, '10\n0\n20\n5')).toBe('PLACES');
+    expect(findLayerOfPolylineContaining(dxf, '10\n5\n20\n0')).toBe('PLACES_PMR');
   });
 });

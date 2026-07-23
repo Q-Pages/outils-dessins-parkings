@@ -2,6 +2,7 @@
 import Drawing from 'dxf-writer';
 import { Point } from '../geometry/projection';
 import { ParkingConfig } from '../geometry/types';
+import { aisleDirectionArrows } from '../geometry/aisleRendering';
 
 function ringToPolylinePoints(ring: Point[]): [number, number][] {
   return ring.map((p) => [p.x, p.y] as [number, number]);
@@ -29,9 +30,16 @@ export function exportConfigToDxf(config: ParkingConfig, boundary: Point[], excl
   }
 
   d.addLayer('VOIES', Drawing.ACI.YELLOW, 'CONTINUOUS');
-  d.setActiveLayer('VOIES');
+  d.addLayer('VOIES_SEPARATEUR', Drawing.ACI.YELLOW, 'DASHED');
   for (const aisle of config.aisles) {
-    d.drawPolyline(ringToPolylinePoints(aisle.centerline), false);
+    if (config.loadType === 'double') {
+      d.setActiveLayer('VOIES_SEPARATEUR');
+      d.drawPolyline(ringToPolylinePoints(aisle.centerline), false);
+    }
+    d.setActiveLayer('VOIES');
+    for (const arrow of aisleDirectionArrows(aisle, config.loadType)) {
+      d.drawPolyline(ringToPolylinePoints(arrow), true);
+    }
   }
 
   return d.toDxfString();
