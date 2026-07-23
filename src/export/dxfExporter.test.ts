@@ -33,23 +33,29 @@ const doubleLoadedConfig: ParkingConfig = {
 const boundary = [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 20 }, { x: 0, y: 20 }];
 const exclusions: { x: number; y: number }[][] = [];
 
-function findLayerOfPolylineContaining(dxf: string, snippet: string): string | undefined {
+interface PolylineBlock {
+  layer: string | undefined;
+  vertexCount: number | undefined;
+  raw: string;
+}
+
+function polylineBlocks(dxf: string): PolylineBlock[] {
   // .slice(1) : le premier fragment (avant la toute première entité LWPOLYLINE)
   // contient l'en-tête DXF et les tables/blocs générés par dxf-writer (dont le bloc
   // *Model_Space, dont le point de base est toujours 0,0,0) — l'inclure risquerait
-  // de faire correspondre un snippet à ce contenu générique plutôt qu'à une vraie
-  // entité de place. On continue aussi la boucle si un bloc contient le snippet mais
-  // n'a pas de tag de calque exploitable, plutôt que de retourner undefined immédiatement.
-  const entityBlocks = dxf.split('0\nLWPOLYLINE').slice(1);
-  for (const block of entityBlocks) {
-    if (block.includes(snippet)) {
-      const match = block.match(/\n8\n([A-Z_]+)\n/);
-      if (match) {
-        return match[1];
-      }
-    }
-  }
-  return undefined;
+  // de faire correspondre un snippet à ce contenu générique plutôt qu'à une vraie entité.
+  return dxf
+    .split('0\nLWPOLYLINE')
+    .slice(1)
+    .map((block) => {
+      const layerMatch = block.match(/\n8\n([A-Z_]+)\n/);
+      const vertexMatch = block.match(/\n90\n(\d+)\n/);
+      return {
+        layer: layerMatch?.[1],
+        vertexCount: vertexMatch ? parseInt(vertexMatch[1], 10) : undefined,
+        raw: block,
+      };
+    });
 }
 
 describe('exportConfigToDxf', () => {
@@ -61,29 +67,47 @@ describe('exportConfigToDxf', () => {
     expect(dxf).toContain('VOIES');
   });
 
-  it('draws one arrow polyline (not a plain centerline) for a single-loaded aisle', () => {
+  it('draws divider lines (2-vertex, open) for stalls on PLACES, and a closed 4-vertex rectangle for the PMR stall on PLACES_PMR', () => {
     const dxf = exportConfigToDxf(sampleConfig, boundary, exclusions);
-    const polylineCount = (dxf.match(/LWPOLYLINE/g) || []).length;
-    // 1 contour + 2 stalls + 1 arrow = 4 LWPOLYLINE entities (no plain centerline for single-loaded)
-    expect(polylineCount).toBe(4);
+    const blocks = polylineBlocks(dxf);
+
+    // 2 adjacent stalls (s1, s2) -> 3 divider lines, each a 2-vertex open polyline on PLACES
+    const placesDividers = blocks.filter((b) => b.layer === 'PLACES');
+    expect(placesDividers).toHaveLength(3);
+    for (const divider of placesDividers) {
+      expect(divider.vertexCount).toBe(2);
+    }
+
+    // the PMR stall's closed rectangle lives on PLACES_PMR as a single 4-vertex polyline
+    const pmrShapes = blocks.filter((b) => b.layer === 'PLACES_PMR');
+    expect(pmrShapes).toHaveLength(1);
+    expect(pmrShapes[0].vertexCount).toBe(4);
+  });
+
+  it('draws one arrow polyline (not a plain centerline) for a single-loaded aisle, on a white VOIES layer', () => {
+    const dxf = exportConfigToDxf(sampleConfig, boundary, exclusions);
+    const blocks = polylineBlocks(dxf);
+    // 1 contour + 3 place dividers + 1 PMR rectangle + 1 arrow = 6 LWPOLYLINE entities
+    expect(blocks).toHaveLength(6);
+    const voiesShapes = blocks.filter((b) => b.layer === 'VOIES');
+    expect(voiesShapes).toHaveLength(1);
+    expect(voiesShapes[0].vertexCount).toBe(3); // the arrow triangle
   });
 
   it('draws two arrows plus a dashed centerline divider for a double-loaded aisle', () => {
     const dxf = exportConfigToDxf(doubleLoadedConfig, boundary, exclusions);
-    const polylineCount = (dxf.match(/LWPOLYLINE/g) || []).length;
-    // 1 contour + 2 stalls + 2 arrows + 1 centerline divider = 6 LWPOLYLINE entities
-    expect(polylineCount).toBe(6);
-    expect(dxf).toContain('VOIES_SEPARATEUR');
+    const blocks = polylineBlocks(dxf);
+    // 1 contour + 3 place dividers + 1 PMR rectangle + 2 arrows + 1 centerline divider = 8
+    expect(blocks).toHaveLength(8);
+    const voiesSeparateurShapes = blocks.filter((b) => b.layer === 'VOIES_SEPARATEUR');
+    expect(voiesSeparateurShapes).toHaveLength(1);
+    expect(voiesSeparateurShapes[0].vertexCount).toBe(2); // the centerline, open 2-vertex polyline
   });
 
-  it('places the standard stall on PLACES and the PMR stall on PLACES_PMR', () => {
-    const dxf = exportConfigToDxf(sampleConfig, boundary, exclusions);
-    // On cible un coin propre à chaque place plutôt que (0,0), qui coïncide avec le
-    // point de base (0,0,0) du bloc *Model_Space généré par dxf-writer avant toute
-    // entité — voir la note dans findLayerOfPolylineContaining ci-dessus.
-    // s1 (standard) a le coin (0,5), non partagé avec s2 ; s2 (PMR) a le coin (5,0),
-    // non partagé avec s1.
-    expect(findLayerOfPolylineContaining(dxf, '10\n0\n20\n5')).toBe('PLACES');
-    expect(findLayerOfPolylineContaining(dxf, '10\n5\n20\n0')).toBe('PLACES_PMR');
+  it('uses white (color 7) for the VOIES and VOIES_SEPARATEUR layers', () => {
+    const dxf = exportConfigToDxf(doubleLoadedConfig, boundary, exclusions);
+    // LAYER table entries: group code 2 = name, group code 62 = ACI color number (7 = white)
+    expect(dxf).toMatch(/2\nVOIES\n[\s\S]{0,80}?62\n7\n/);
+    expect(dxf).toMatch(/2\nVOIES_SEPARATEUR\n[\s\S]{0,80}?62\n7\n/);
   });
 });

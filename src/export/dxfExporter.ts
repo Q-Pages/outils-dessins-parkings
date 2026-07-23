@@ -3,6 +3,7 @@ import Drawing from 'dxf-writer';
 import { Point } from '../geometry/projection';
 import { ParkingConfig } from '../geometry/types';
 import { aisleDirectionArrows } from '../geometry/aisleRendering';
+import { stallDividerLines } from '../geometry/stallMarkings';
 
 function ringToPolylinePoints(ring: Point[]): [number, number][] {
   return ring.map((p) => [p.x, p.y] as [number, number]);
@@ -24,13 +25,21 @@ export function exportConfigToDxf(config: ParkingConfig, boundary: Point[], excl
 
   d.addLayer('PLACES', Drawing.ACI.CYAN, 'CONTINUOUS');
   d.addLayer('PLACES_PMR', Drawing.ACI.BLUE, 'CONTINUOUS');
-  for (const stall of config.stalls) {
-    d.setActiveLayer(stall.isPmr ? 'PLACES_PMR' : 'PLACES');
-    d.drawPolyline(ringToPolylinePoints(stall.corners), true);
+
+  d.setActiveLayer('PLACES');
+  for (const [a, b] of stallDividerLines(config.stalls)) {
+    d.drawPolyline(ringToPolylinePoints([a, b]), false);
   }
 
-  d.addLayer('VOIES', Drawing.ACI.YELLOW, 'CONTINUOUS');
-  d.addLayer('VOIES_SEPARATEUR', Drawing.ACI.YELLOW, 'DASHED');
+  d.setActiveLayer('PLACES_PMR');
+  for (const stall of config.stalls) {
+    if (stall.isPmr) {
+      d.drawPolyline(ringToPolylinePoints(stall.corners), true);
+    }
+  }
+
+  d.addLayer('VOIES', Drawing.ACI.WHITE, 'CONTINUOUS');
+  d.addLayer('VOIES_SEPARATEUR', Drawing.ACI.WHITE, 'DASHED');
   for (const aisle of config.aisles) {
     if (config.loadType === 'double') {
       d.setActiveLayer('VOIES_SEPARATEUR');
