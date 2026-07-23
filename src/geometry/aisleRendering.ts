@@ -35,9 +35,18 @@ function makeArrow(center: Point, direction: Point, arrowLength: number, arrowWi
 export function aisleDirectionArrows(aisle: AisleBand, loadType: 'single' | 'double'): Ring[] {
   const [start, end] = aisle.centerline;
   const length = distance(start, end);
+
+  // Une voie de longueur nulle n'a pas de sens de circulation à représenter —
+  // éviter la division par zéro dans normalize() plutôt que propager des NaN.
+  if (length === 0) {
+    return [];
+  }
+
   const direction = normalize({ x: end.x - start.x, y: end.y - start.y });
   const arrowWidth = aisle.width * 0.5;
-  const arrowLength = arrowWidth * 2;
+  // Plafonner la longueur de flèche à 80% de la longueur de la voie pour éviter
+  // qu'elle ne déborde visuellement d'une voie très courte.
+  const arrowLength = Math.min(arrowWidth * 2, length * 0.8);
 
   if (loadType === 'single') {
     const mid: Point = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };

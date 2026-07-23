@@ -48,4 +48,31 @@ describe('aisleDirectionArrows', () => {
     expect(arrows[0][1].y).toBeCloseTo(2.5, 6);
     expect(arrows[0][2].y).toBeCloseTo(-2.5, 6);
   });
+
+  it('returns no arrows for a zero-length aisle instead of producing NaN', () => {
+    const degenerateAisle: AisleBand = { centerline: [{ x: 5, y: 5 }, { x: 5, y: 5 }], width: 5 };
+    expect(aisleDirectionArrows(degenerateAisle, 'single')).toEqual([]);
+    expect(aisleDirectionArrows(degenerateAisle, 'double')).toEqual([]);
+  });
+
+  it('clamps arrow length so it does not exceed the aisle for a short, wide aisle', () => {
+    const shortAisle: AisleBand = { centerline: [{ x: 0, y: 0 }, { x: 2, y: 0 }], width: 6 };
+    // Without clamping, arrowLength would be 6 (arrowWidth=width*0.5=3, arrowLength=arrowWidth*2=6) on a 2m-long aisle.
+    // Clamped: arrowLength = min(6, 2 * 0.8) = 1.6, so the tip is at most 0.8m from
+    // the midpoint (1, 0) in either direction — well within the aisle's own extent.
+    const arrows = aisleDirectionArrows(shortAisle, 'single');
+    expect(arrows[0][0].x).toBeLessThanOrEqual(2);
+    expect(arrows[0][0].x).toBeGreaterThanOrEqual(0);
+  });
+
+  it('produces a correctly oriented arrow for a diagonal aisle', () => {
+    const diagonalAisle: AisleBand = { centerline: [{ x: 0, y: 0 }, { x: 10, y: 10 }], width: 4 };
+    const arrows = aisleDirectionArrows(diagonalAisle, 'single');
+    // direction = (1/sqrt(2), 1/sqrt(2)), mid = (5, 5), arrowWidth = 2, arrowLength = min(4, 8) = 4
+    const invSqrt2 = 1 / Math.sqrt(2);
+    const expectedTipX = 5 + invSqrt2 * 2;
+    const expectedTipY = 5 + invSqrt2 * 2;
+    expect(arrows[0][0].x).toBeCloseTo(expectedTipX, 6);
+    expect(arrows[0][0].y).toBeCloseTo(expectedTipY, 6);
+  });
 });
