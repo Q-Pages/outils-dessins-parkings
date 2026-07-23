@@ -720,6 +720,27 @@ describe('connectAislesToAccessPoints', () => {
     const result = connectAislesToAccessPoints(aisles, []);
     expect(result).toEqual(aisles);
   });
+
+  it('connects every access point even when multiple aisles compete for the same nearest one', () => {
+    const aisles: AisleBand[] = [
+      { centerline: [{ x: 0, y: 0 }, { x: 100, y: 0 }], width: 5 },
+      { centerline: [{ x: 0, y: 2 }, { x: 100, y: 2 }], width: 5 },
+    ];
+    // access0 is equidistant (distance 1) from both aisles' start points, so a
+    // per-aisle algorithm would have BOTH aisles snap to access0, leaving access1
+    // unconnected. The per-access-point algorithm must still connect access1.
+    const accessPoints = [
+      { x: 0, y: 1 },
+      { x: 50, y: 50 },
+    ];
+
+    const result = connectAislesToAccessPoints(aisles, accessPoints);
+
+    expect(result[0].centerline[0]).toEqual({ x: 0, y: 1 });
+    expect(result[0].centerline[1]).toEqual({ x: 100, y: 0 });
+    expect(result[1].centerline[0]).toEqual({ x: 50, y: 50 });
+    expect(result[1].centerline[1]).toEqual({ x: 100, y: 2 });
+  });
 });
 ```
 
@@ -729,6 +750,8 @@ Run: `npx vitest run src/geometry/accessConnectivity.test.ts`
 Expected: FAIL — `Cannot find module './accessConnectivity'`
 
 - [ ] **Step 3: Implémenter `connectAislesToAccessPoints`**
+
+Décision documentée (révisée après revue de code) : une première version itérait par voie (chaque voie choisit son point d'accès le plus proche), ce qui pouvait laisser des points d'accès orphelins si plusieurs voies convergeaient vers le même point d'accès le plus proche. La version ci-dessous itère par point d'accès à la place, garantissant que chaque point d'accès soit raccordé à l'extrémité de voie la plus proche disponible. Limite V1 restante et acceptée : si un point d'accès n'est pas aligné avec l'axe de la voie qu'il rejoint, le segment obtenu n'est plus parfaitement rectiligne (le déplacement de l'extrémité crée un coude) — acceptable pour l'export DXF en V1 (tracé comme simple polyligne), à revoir si une vraie géométrie de raccordement est nécessaire plus tard (backlog V2).
 
 ```typescript
 // src/geometry/accessConnectivity.ts
@@ -744,37 +767,44 @@ export function connectAislesToAccessPoints(aisles: AisleBand[], accessPoints: P
     return aisles;
   }
 
-  return aisles.map((aisle) => {
-    let bestAccessPoint: Point | null = null;
-    let bestDistance = Infinity;
-    let bestEndIndex: 0 | 1 = 0;
+  // Connecte chaque point d'accès à l'extrémité de voie la plus proche sur tout le
+  // réseau (plutôt que chaque voie à son point d'accès le plus proche), pour garantir
+  // qu'aucun point d'accès ne reste orphelin même si plusieurs voies préféreraient le
+  // même point d'accès.
+  const updated: AisleBand[] = aisles.map((aisle) => ({
+    ...aisle,
+    centerline: [...aisle.centerline] as [Point, Point],
+  }));
 
-    for (const access of accessPoints) {
+  for (const access of accessPoints) {
+    let bestAisleIndex = -1;
+    let bestEndIndex: 0 | 1 = 0;
+    let bestDistance = Infinity;
+
+    updated.forEach((aisle, aisleIndex) => {
       for (const endIndex of [0, 1] as const) {
         const d = distance(aisle.centerline[endIndex], access);
         if (d < bestDistance) {
           bestDistance = d;
-          bestAccessPoint = access;
+          bestAisleIndex = aisleIndex;
           bestEndIndex = endIndex;
         }
       }
-    }
+    });
 
-    if (!bestAccessPoint) {
-      return aisle;
+    if (bestAisleIndex !== -1) {
+      updated[bestAisleIndex].centerline[bestEndIndex] = access;
     }
+  }
 
-    const newCenterline: [Point, Point] = [...aisle.centerline] as [Point, Point];
-    newCenterline[bestEndIndex] = bestAccessPoint;
-    return { ...aisle, centerline: newCenterline };
-  });
+  return updated;
 }
 ```
 
 - [ ] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `npx vitest run src/geometry/accessConnectivity.test.ts`
-Expected: PASS (2 tests)
+Expected: PASS (3 tests)
 
 - [ ] **Step 5: Commit**
 
