@@ -28,9 +28,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
   configs: [],
   selectedConfigIndex: 0,
 
-  setBoundary: (boundary) => set({ boundary }),
-  setExclusions: (exclusions) => set({ exclusions }),
-  setAccessPoints: (points) => set({ accessPoints: points }),
+  setBoundary: (boundary) => set({ boundary, configs: [], selectedConfigIndex: 0 }),
+  setExclusions: (exclusions) => set({ exclusions, configs: [], selectedConfigIndex: 0 }),
+  setAccessPoints: (points) => set({ accessPoints: points, configs: [], selectedConfigIndex: 0 }),
   setParams: (params) => set((state) => ({ params: { ...state.params, ...params } })),
   setConfigs: (configs) => set({ configs, selectedConfigIndex: 0 }),
   selectConfig: (index) => set({ selectedConfigIndex: index }),

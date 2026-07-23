@@ -19,7 +19,9 @@ function downloadFile(filename: string, content: string, mimeType: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
@@ -103,8 +105,12 @@ export default function App() {
   const handleImportProject = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const data = deserializeProject(reader.result as string);
-      loadProject(data);
+      try {
+        const data = deserializeProject(reader.result as string);
+        loadProject(data);
+      } catch (error) {
+        alert(`Impossible de charger ce fichier de projet : ${error instanceof Error ? error.message : 'erreur inconnue'}.`);
+      }
     };
     reader.readAsText(file);
   };
