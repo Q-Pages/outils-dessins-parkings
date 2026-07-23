@@ -1998,9 +1998,15 @@ git commit -m "feat: wire up map, params, generation and export into the app"
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// GitHub Actions expose GITHUB_REPOSITORY sous la forme "owner/repo" pendant le build ;
+// on en déduit le sous-chemin Pages automatiquement plutôt que de coder en dur le nom du
+// dépôt (qui casserait silencieusement tous les chemins d'assets si le dépôt était renommé).
+// En local (npm run dev / build hors CI), la variable est absente et base retombe sur '/'.
+const repoName = process.env.GITHUB_REPOSITORY?.split('/')[1];
+
 export default defineConfig({
   plugins: [react()],
-  base: '/outil-dessin-parkings/', // à adapter au nom du dépôt GitHub une fois créé
+  base: repoName ? `/${repoName}/` : '/',
 });
 ```
 
@@ -2019,20 +2025,30 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
       - run: npm ci
       - run: npm run build
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-      - uses: actions/deploy-pages@v4
+      - id: deployment
+        uses: actions/deploy-pages@v4
 ```
 
 - [ ] **Step 3: Vérifier le build en local**
