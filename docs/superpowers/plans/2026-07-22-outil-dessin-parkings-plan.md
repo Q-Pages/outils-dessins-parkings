@@ -1422,12 +1422,41 @@ git commit -m "feat: export parking configuration to layered DXF"
 
 **Files:**
 - Create: `src/components/MapView.tsx`
+- Modify: `src/store/projectStore.ts`
 
-- [ ] **Step 1: Implémenter le composant carte**
+**Révision post-Task 11 :** la revue de code de Task 11 a signalé que le store n'avait que des actions d'ajout (`addExclusion`/`addAccessPoint`), sans suppression — un vrai problème puisque Leaflet.Draw expose un outil d'édition/suppression (`edit: { featureGroup: drawnItems }`) qui, sans setters adaptés, laisserait le contenu de la carte diverger silencieusement de l'état de l'app. Solution retenue : remplacer les actions d'ajout par des setters complets (`setExclusions`/`setAccessPoints`), et reconstruire l'état entier à partir des calques Leaflet présents sur la carte après chaque événement CREATED/EDITED/DELETED — plus robuste qu'un suivi d'index individuel qui deviendrait invalide après une suppression.
+
+- [ ] **Step 1 : modifier `src/store/projectStore.ts`**
+
+Dans l'interface `ProjectState`, remplacer :
+```typescript
+addExclusion: (exclusion: LatLng[]) => void;
+addAccessPoint: (point: LatLng) => void;
+```
+par :
+```typescript
+setExclusions: (exclusions: LatLng[][]) => void;
+setAccessPoints: (points: LatLng[]) => void;
+```
+
+Dans l'objet passé à `create<ProjectState>((set) => ({...}))`, remplacer :
+```typescript
+addExclusion: (exclusion) => set((state) => ({ exclusions: [...state.exclusions, exclusion] })),
+addAccessPoint: (point) => set((state) => ({ accessPoints: [...state.accessPoints, point] })),
+```
+par :
+```typescript
+setExclusions: (exclusions) => set({ exclusions }),
+setAccessPoints: (points) => set({ accessPoints: points }),
+```
+
+Le reste du fichier (état `boundary`/`params`/`configs`/`selectedConfigIndex`, `setBoundary`, `setParams`, `setConfigs`, `selectConfig`, `loadProject`) reste inchangé.
+
+- [ ] **Step 2: Implémenter le composant carte**
 
 ```typescript
 // src/components/MapView.tsx
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -1482,10 +1511,10 @@ function SearchBar() {
 function DrawingLayer() {
   const map = useMap();
   const setBoundary = useProjectStore((s) => s.setBoundary);
-  const addExclusion = useProjectStore((s) => s.addExclusion);
-  const addAccessPoint = useProjectStore((s) => s.addAccessPoint);
+  const setExclusions = useProjectStore((s) => s.setExclusions);
+  const setAccessPoints = useProjectStore((s) => s.setAccessPoints);
 
-  useState(() => {
+  useEffect(() => {
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
@@ -1502,26 +1531,49 @@ function DrawingLayer() {
     });
     map.addControl(drawControl);
 
-    map.on((L as any).Draw.Event.CREATED, (event: any) => {
-      const layer = event.layer;
-      drawnItems.addLayer(layer);
+    // Après toute création/édition/suppression, on reconstruit l'état complet à partir
+    // des calques actuellement présents sur la carte (source de vérité), plutôt que de
+    // suivre des index individuels qui deviendraient invalides après une suppression.
+    function syncStoreFromLayers() {
+      const polygonRings: L.LatLng[][] = [];
+      const accessPoints: L.LatLng[] = [];
 
-      if (event.layerType === 'marker') {
-        const latlng = layer.getLatLng();
-        addAccessPoint({ lat: latlng.lat, lng: latlng.lng });
-        return;
-      }
-
-      if (event.layerType === 'polygon') {
-        const latlngs = layer.getLatLngs()[0].map((p: L.LatLng) => ({ lat: p.lat, lng: p.lng }));
-        if (useProjectStore.getState().boundary.length === 0) {
-          setBoundary(latlngs);
-        } else {
-          addExclusion(latlngs);
+      drawnItems.eachLayer((layer) => {
+        if (layer instanceof L.Marker) {
+          accessPoints.push(layer.getLatLng());
+        } else if (layer instanceof L.Polygon) {
+          polygonRings.push((layer.getLatLngs()[0] as L.LatLng[]).slice());
         }
-      }
-    });
-  });
+      });
+
+      // TypeScript ne peut pas suivre la réassignation d'un `let` externe depuis
+      // l'intérieur de la closure `eachLayer` (narrowing en `never` à la lecture),
+      // donc on collecte d'abord tous les polygones dans un tableau puis on
+      // destructure : premier polygone = contour, le reste = exclusions.
+      const [boundary, ...exclusionRings] = polygonRings;
+
+      setBoundary((boundary ?? []).map((p) => ({ lat: p.lat, lng: p.lng })));
+      setExclusions(exclusionRings.map((ring) => ring.map((p) => ({ lat: p.lat, lng: p.lng }))));
+      setAccessPoints(accessPoints.map((p) => ({ lat: p.lat, lng: p.lng })));
+    }
+
+    function handleCreated(event: any) {
+      drawnItems.addLayer(event.layer);
+      syncStoreFromLayers();
+    }
+
+    map.on((L as any).Draw.Event.CREATED, handleCreated);
+    map.on((L as any).Draw.Event.EDITED, syncStoreFromLayers);
+    map.on((L as any).Draw.Event.DELETED, syncStoreFromLayers);
+
+    return () => {
+      map.off((L as any).Draw.Event.CREATED, handleCreated);
+      map.off((L as any).Draw.Event.EDITED, syncStoreFromLayers);
+      map.off((L as any).Draw.Event.DELETED, syncStoreFromLayers);
+      map.removeControl(drawControl);
+      map.removeLayer(drawnItems);
+    };
+  }, [map, setBoundary, setExclusions, setAccessPoints]);
 
   return null;
 }
@@ -1540,12 +1592,12 @@ export function MapView() {
 }
 ```
 
-- [ ] **Step 2: Vérifier que le projet compile**
+- [ ] **Step 3: Vérifier que le projet compile**
 
-Run: `npx tsc --noEmit`
+Run: `npx tsc --noEmit` puis `npm run build` (le build `tsc -b` fait référence, plus strict)
 Expected: aucune erreur (si `leaflet-draw` ne fournit pas de types complets, ajouter un fichier `src/types/leaflet-draw.d.ts` avec `declare module 'leaflet-draw';`)
 
-- [ ] **Step 3: Test manuel**
+- [ ] **Step 4: Test manuel**
 
 Run: `npm run dev`
 1. Ouvrir l'app dans le navigateur, taper une adresse française dans la barre de recherche → vérifier que la carte se centre dessus.
@@ -1553,11 +1605,13 @@ Run: `npm run dev`
 3. Utiliser l'outil polygone pour tracer un contour → vérifier qu'il apparaît sur la carte.
 4. Tracer un deuxième polygone → vérifier qu'il est traité comme zone d'exclusion (pas comme nouveau contour).
 5. Poser un marqueur → vérifier qu'il est enregistré comme point d'accès.
+6. Utiliser l'outil d'édition Leaflet.Draw pour supprimer une zone d'exclusion ou un point d'accès → vérifier que l'état de l'app (visible dans Task 15 via le panneau résultats/état) reflète bien la suppression.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/MapView.tsx src/types/leaflet-draw.d.ts
+git add src/components/MapView.tsx src/store/projectStore.ts
+git add src/types/leaflet-draw.d.ts 2>/dev/null || true
 git commit -m "feat: add map view with address/coordinate search and drawing tools"
 ```
 
