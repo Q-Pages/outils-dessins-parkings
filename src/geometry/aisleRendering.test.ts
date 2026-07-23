@@ -65,6 +65,17 @@ describe('aisleDirectionArrows', () => {
     expect(arrows[0][0].x).toBeGreaterThanOrEqual(0);
   });
 
+  it('clamps arrow length for a short, wide double-loaded aisle so both arrows stay within the aisle', () => {
+    const shortAisle: AisleBand = { centerline: [{ x: 0, y: 0 }, { x: 2, y: 0 }], width: 6 };
+    const arrows = aisleDirectionArrows(shortAisle, 'double');
+    for (const arrow of arrows) {
+      for (const point of arrow) {
+        expect(point.x).toBeGreaterThanOrEqual(-1e-9);
+        expect(point.x).toBeLessThanOrEqual(2 + 1e-9);
+      }
+    }
+  });
+
   it('produces a correctly oriented arrow for a diagonal aisle', () => {
     const diagonalAisle: AisleBand = { centerline: [{ x: 0, y: 0 }, { x: 10, y: 10 }], width: 4 };
     const arrows = aisleDirectionArrows(diagonalAisle, 'single');

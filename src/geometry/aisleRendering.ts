@@ -44,15 +44,22 @@ export function aisleDirectionArrows(aisle: AisleBand, loadType: 'single' | 'dou
 
   const direction = normalize({ x: end.x - start.x, y: end.y - start.y });
   const arrowWidth = aisle.width * 0.5;
-  // Plafonner la longueur de flèche à 80% de la longueur de la voie pour éviter
-  // qu'elle ne déborde visuellement d'une voie très courte.
-  const arrowLength = Math.min(arrowWidth * 2, length * 0.8);
 
   if (loadType === 'single') {
+    // L'unique flèche est centrée sur le milieu de la voie : la plafonner à 80% de
+    // la longueur garantit qu'elle reste entièrement dans les bornes [0, length].
+    const arrowLength = Math.min(arrowWidth * 2, length * 0.8);
     const mid: Point = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
     return [makeArrow(mid, direction, arrowLength, arrowWidth)];
   }
 
+  // Les deux flèches sont centrées au tiers et aux deux tiers de la voie (pas au
+  // milieu) : chaque centre ne dispose que de length/3 de marge vers l'extrémité
+  // la plus proche dans le sens où sa base s'étend. Plafonner à 2/3 de la longueur
+  // (donc une demi-longueur de flèche <= length/3) garantit que chaque flèche
+  // reste dans les bornes [0, length], contrairement à un plafond de 80% partagé
+  // avec le cas simple sens qui laisserait déborder la base de chaque flèche.
+  const arrowLength = Math.min(arrowWidth * 2, (length * 2) / 3);
   const posA: Point = {
     x: start.x + direction.x * (length / 3),
     y: start.y + direction.y * (length / 3),
