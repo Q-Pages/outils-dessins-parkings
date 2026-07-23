@@ -1753,6 +1753,24 @@ git commit -m "feat: add params and results panels"
 - Modify: `src/App.tsx`
 - Modify: `src/App.css`
 
+**Correction post-revue de code (bug critique) :** `setBoundary`/`setExclusions`/`setAccessPoints` (store, Task 11/13) ne réinitialisaient pas `configs` — donc éditer le contour ou une zone d'exclusion après avoir généré un plan laisse les places/voies affichées et exportées en DXF calculées sur l'ancienne géométrie, désynchronisées de ce qui est maintenant tracé sur la carte, sans aucun avertissement. C'est un vrai risque pour un outil dont la sortie sert de base à un plan CAO. Corriger `src/store/projectStore.ts` (déjà committé, Task 11/13) en remplaçant ces trois actions :
+
+```typescript
+  setBoundary: (boundary) => set({ boundary }),
+  setExclusions: (exclusions) => set({ exclusions }),
+  setAccessPoints: (points) => set({ accessPoints: points }),
+```
+
+par :
+
+```typescript
+  setBoundary: (boundary) => set({ boundary, configs: [], selectedConfigIndex: 0 }),
+  setExclusions: (exclusions) => set({ exclusions, configs: [], selectedConfigIndex: 0 }),
+  setAccessPoints: (points) => set({ accessPoints: points, configs: [], selectedConfigIndex: 0 }),
+```
+
+Le reste du fichier (`ProjectState`, état initial, `setParams`, `setConfigs`, `selectConfig`, `loadProject`) reste inchangé. Effet : toute modification du tracé après génération vide automatiquement `configs`, ce qui fait réafficher "Aucune configuration générée pour l'instant." dans `ResultsPanel` et désactive le bouton "Exporter en DXF" (déjà conditionné sur `configs.length === 0`) — l'utilisateur est ainsi obligé de relancer "Générer le plan" avant de pouvoir réexporter, sans risque de DXF désynchronisé.
+
 - [ ] **Step 1: Écrire `App.tsx` qui relie carte, paramètres, génération et export**
 
 ```typescript
@@ -1777,7 +1795,9 @@ function downloadFile(filename: string, content: string, mimeType: string) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
@@ -1861,8 +1881,12 @@ export default function App() {
   const handleImportProject = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const data = deserializeProject(reader.result as string);
-      loadProject(data);
+      try {
+        const data = deserializeProject(reader.result as string);
+        loadProject(data);
+      } catch (error) {
+        alert(`Impossible de charger ce fichier de projet : ${error instanceof Error ? error.message : 'erreur inconnue'}.`);
+      }
     };
     reader.readAsText(file);
   };
