@@ -1473,6 +1473,9 @@ async function searchAddress(query: string): Promise<{ lat: number; lng: number 
   }
 
   const response = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=1`);
+  if (!response.ok) {
+    throw new Error(`Adresse : requête échouée (${response.status})`);
+  }
   const data = await response.json();
   const feature = data.features?.[0];
   if (!feature) {
@@ -1487,11 +1490,15 @@ function SearchBar() {
   const [query, setQuery] = useState('');
 
   const handleSearch = async () => {
-    const result = await searchAddress(query);
-    if (result) {
-      map.setView([result.lat, result.lng], 19);
-    } else {
-      alert("Adresse ou coordonnées introuvables.");
+    try {
+      const result = await searchAddress(query);
+      if (result) {
+        map.setView([result.lat, result.lng], 19);
+      } else {
+        alert("Adresse ou coordonnées introuvables.");
+      }
+    } catch {
+      alert("Erreur lors de la recherche — vérifie ta connexion et réessaie.");
     }
   };
 
