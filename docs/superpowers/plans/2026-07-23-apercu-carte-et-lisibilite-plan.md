@@ -110,6 +110,17 @@ describe('aisleDirectionArrows', () => {
     expect(arrows[0][0].x).toBeGreaterThanOrEqual(0);
   });
 
+  it('clamps arrow length for a short, wide double-loaded aisle so both arrows stay within the aisle', () => {
+    const shortAisle: AisleBand = { centerline: [{ x: 0, y: 0 }, { x: 2, y: 0 }], width: 6 };
+    const arrows = aisleDirectionArrows(shortAisle, 'double');
+    for (const arrow of arrows) {
+      for (const point of arrow) {
+        expect(point.x).toBeGreaterThanOrEqual(-1e-9);
+        expect(point.x).toBeLessThanOrEqual(2 + 1e-9);
+      }
+    }
+  });
+
   it('produces a correctly oriented arrow for a diagonal aisle', () => {
     const diagonalAisle: AisleBand = { centerline: [{ x: 0, y: 0 }, { x: 10, y: 10 }], width: 4 };
     const arrows = aisleDirectionArrows(diagonalAisle, 'single');
@@ -177,15 +188,22 @@ export function aisleDirectionArrows(aisle: AisleBand, loadType: 'single' | 'dou
 
   const direction = normalize({ x: end.x - start.x, y: end.y - start.y });
   const arrowWidth = aisle.width * 0.5;
-  // Plafonner la longueur de flèche à 80% de la longueur de la voie pour éviter
-  // qu'elle ne déborde visuellement d'une voie très courte.
-  const arrowLength = Math.min(arrowWidth * 2, length * 0.8);
 
   if (loadType === 'single') {
+    // L'unique flèche est centrée sur le milieu de la voie : la plafonner à 80% de
+    // la longueur garantit qu'elle reste entièrement dans les bornes [0, length].
+    const arrowLength = Math.min(arrowWidth * 2, length * 0.8);
     const mid: Point = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
     return [makeArrow(mid, direction, arrowLength, arrowWidth)];
   }
 
+  // Les deux flèches sont centrées au tiers et aux deux tiers de la voie (pas au
+  // milieu) : chaque centre ne dispose que de length/3 de marge vers l'extrémité
+  // la plus proche dans le sens où sa base s'étend. Plafonner à 2/3 de la longueur
+  // (donc une demi-longueur de flèche <= length/3) garantit que chaque flèche
+  // reste dans les bornes [0, length], contrairement à un plafond de 80% partagé
+  // avec le cas simple sens qui laisserait déborder la base de chaque flèche.
+  const arrowLength = Math.min(arrowWidth * 2, (length * 2) / 3);
   const posA: Point = {
     x: start.x + direction.x * (length / 3),
     y: start.y + direction.y * (length / 3),
@@ -206,7 +224,7 @@ export function aisleDirectionArrows(aisle: AisleBand, loadType: 'single' | 'dou
 - [ ] **Step 4: Lancer le test pour vérifier le succès**
 
 Run: `npx vitest run src/geometry/aisleRendering.test.ts`
-Expected: PASS (6 tests)
+Expected: PASS (7 tests)
 
 - [ ] **Step 5: Commit**
 
