@@ -1720,9 +1720,10 @@ export function ResultsPanel() {
       <h4>Alternatives</h4>
       <ul>
         {configs.map((config, index) => (
-          <li key={index}>
+          <li key={`${config.angleDeg}-${config.loadType}-${config.rowDirectionDeg}`}>
             <button onClick={() => selectConfig(index)} disabled={index === selectedConfigIndex}>
-              {config.totalCount} places — {config.angleDeg}° — {config.loadType}
+              {config.totalCount} places — {config.angleDeg}° — voie{' '}
+              {config.loadType === 'double' ? 'double sens' : 'simple sens'}
             </button>
           </li>
         ))}
