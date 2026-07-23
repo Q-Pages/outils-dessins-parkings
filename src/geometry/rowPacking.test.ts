@@ -52,4 +52,31 @@ describe('packRows', () => {
     const expectedRows = Math.floor(20 / expectedModuleDepth);
     expect(result.stalls).toHaveLength(expectedStallsPerRow * expectedRows);
   });
+
+  it('produces correctly rotated stalls for a non-zero row direction', () => {
+    const angleDeg = 30;
+    const angleRad = (angleDeg * Math.PI) / 180;
+    const rotate = (p: { x: number; y: number }) => ({
+      x: p.x * Math.cos(angleRad) - p.y * Math.sin(angleRad),
+      y: p.x * Math.sin(angleRad) + p.y * Math.cos(angleRad),
+    });
+    const rotatedRectangle: Ring = rectangle.map(rotate);
+
+    const result = packRows(rotatedRectangle, [], DEFAULT_SOLVER_PARAMS, angleDeg, 'single');
+
+    // Same axis-aligned packing as the un-rotated case, just rotated by angleDeg
+    expect(result.stalls).toHaveLength(24);
+    expect(result.aisles).toHaveLength(2);
+
+    // Un-rotate the first stall's corners and confirm they land on the axis-aligned grid
+    const unrotate = (p: { x: number; y: number }) => ({
+      x: p.x * Math.cos(-angleRad) - p.y * Math.sin(-angleRad),
+      y: p.x * Math.sin(-angleRad) + p.y * Math.cos(-angleRad),
+    });
+    const firstStallLocalCorners = result.stalls[0].corners.map(unrotate);
+    expect(firstStallLocalCorners[0].x).toBeCloseTo(0, 6);
+    expect(firstStallLocalCorners[0].y).toBeCloseTo(0, 6);
+    expect(firstStallLocalCorners[2].x).toBeCloseTo(2.5, 6);
+    expect(firstStallLocalCorners[2].y).toBeCloseTo(5, 6);
+  });
 });
