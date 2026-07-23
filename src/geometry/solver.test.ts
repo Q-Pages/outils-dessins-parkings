@@ -38,4 +38,45 @@ describe('solveParkingConfigurations', () => {
     expect(best.pmrCount).toBe(expectedPmr);
     expect(best.totalCount).toBe(best.standardCount + best.pmrCount);
   });
+
+  it('returns an empty array when the boundary is too small to fit any stall', () => {
+    const tinyBoundary: Ring = [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 },
+      { x: 1, y: 1 },
+      { x: 0, y: 1 },
+    ];
+    const configs = solveParkingConfigurations({
+      boundary: tinyBoundary,
+      exclusions: [],
+      accessPoints: [],
+      baseParams: DEFAULT_SOLVER_PARAMS,
+    });
+    expect(configs).toEqual([]);
+  });
+
+  it('returns an empty array when an exclusion zone covers the entire boundary', () => {
+    const fullExclusion: Ring = [...rectangle];
+    const configs = solveParkingConfigurations({
+      boundary: rectangle,
+      exclusions: [fullExclusion],
+      accessPoints: [],
+      baseParams: DEFAULT_SOLVER_PARAMS,
+    });
+    expect(configs).toEqual([]);
+  });
+
+  it('records plausible angleDeg/loadType/rowDirectionDeg fields on every returned config', () => {
+    const configs = solveParkingConfigurations({
+      boundary: rectangle,
+      exclusions: [],
+      accessPoints: [{ x: 0, y: 5 }],
+      baseParams: DEFAULT_SOLVER_PARAMS,
+    });
+    for (const config of configs) {
+      expect([90, 60, 45]).toContain(config.angleDeg);
+      expect(['single', 'double']).toContain(config.loadType);
+      expect(typeof config.rowDirectionDeg).toBe('number');
+    }
+  });
 });

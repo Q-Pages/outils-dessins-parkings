@@ -27,3 +27,31 @@ export function stallFitsUsableArea(stallRing: Ring, boundary: Ring, exclusions:
 
   return true;
 }
+
+export interface PreparedUsableArea {
+  boundaryPoly: ReturnType<typeof toTurfPolygon>;
+  exclusionPolys: ReturnType<typeof toTurfPolygon>[];
+}
+
+export function prepareUsableArea(boundary: Ring, exclusions: Ring[]): PreparedUsableArea {
+  return {
+    boundaryPoly: toTurfPolygon(boundary),
+    exclusionPolys: exclusions.map(toTurfPolygon),
+  };
+}
+
+export function stallFitsPreparedArea(stallRing: Ring, prepared: PreparedUsableArea): boolean {
+  const stallPoly = toTurfPolygon(stallRing);
+
+  if (!booleanContains(prepared.boundaryPoly, stallPoly)) {
+    return false;
+  }
+
+  for (const exclusionPoly of prepared.exclusionPolys) {
+    if (booleanIntersects(stallPoly, exclusionPoly)) {
+      return false;
+    }
+  }
+
+  return true;
+}

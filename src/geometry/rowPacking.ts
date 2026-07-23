@@ -1,7 +1,7 @@
 // src/geometry/rowPacking.ts
 import { Point } from './projection';
 import { AisleBand, Ring, SolverParams, Stall } from './types';
-import { stallFitsUsableArea } from './containment';
+import { prepareUsableArea, stallFitsPreparedArea } from './containment';
 
 function rotatePoint(p: Point, angleRad: number): Point {
   return {
@@ -39,6 +39,7 @@ export function packRows(
   const rotatedBoundary = boundary.map((p) => rotatePoint(p, rotBack));
   const rotatedExclusions = exclusions.map((ring) => ring.map((p) => rotatePoint(p, rotBack)));
   const bbox = boundingBox(rotatedBoundary);
+  const prepared = prepareUsableArea(rotatedBoundary, rotatedExclusions);
 
   const stallAngleRad = (params.angleDeg * Math.PI) / 180;
   const stallWidthAlongRow = params.standardStallWidth / Math.sin(stallAngleRad);
@@ -65,7 +66,7 @@ export function packRows(
           { x: x + stallWidthAlongRow, y: rowY + stallDepth },
           { x, y: rowY + stallDepth },
         ];
-        if (stallFitsUsableArea(localCorners, rotatedBoundary, rotatedExclusions)) {
+        if (stallFitsPreparedArea(localCorners, prepared)) {
           stalls.push({
             id: `r${rowIndex}-${stalls.length}`,
             corners: localCorners.map((p) => rotatePoint(p, angleRad)),
