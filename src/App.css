@@ -7,6 +7,24 @@
 
 .map-container {
   flex: 1;
+  position: relative;
+}
+
+.search-bar {
+  position: absolute;
+  top: 10px;
+  left: 60px;
+  z-index: 1000;
+  display: flex;
+  gap: 0.5rem;
+  background: white;
+  padding: 0.5rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.search-bar input {
+  width: 260px;
 }
 
 .side-panel {
