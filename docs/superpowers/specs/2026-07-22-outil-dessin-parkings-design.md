@@ -49,7 +49,9 @@ Valeurs par défaut normalisées françaises, toutes modifiables :
 - Dimensions place PMR (ex. 3,3 × 5 m).
 - Angle de stationnement (90°, 60°, 45°...).
 - Largeur de voie à sens unique / double sens.
-- Ratio réglementaire de places PMR (proposé automatiquement selon le nombre total de places, modifiable).
+- Ratio réglementaire de places PMR (proposé automatiquement selon le nombre total de places).
+
+**Limitation V1 documentée** (constatée lors de la revue finale de l'implémentation) : le ratio PMR (2% du nombre de places, arrondi au supérieur) est fixé en dur dans le code (`DEFAULT_SOLVER_PARAMS.pmrRatio`) et n'est **pas** modifiable depuis l'interface en V1, contrairement à ce que cette section annonçait initialement — seules les dimensions et largeurs de voie sont éditables via le panneau de paramètres. Le rendre configurable nécessiterait de changer sa représentation (actuellement une fonction, non sérialisable en JSON) en un paramètre numérique simple. Reporté au backlog V2 si un ratio différent de 2% s'avère nécessaire en usage réel (autre réglementation locale, taille de parking atypique).
 
 ### 4.3 Génération (ParkingSolver)
 Approche retenue : **balayage de configurations standards** (validée par une étude MDPI 2024 sur la conception automatisée de parkings, qui décrit une approche similaire : rangées doubles parallèles séparées par des voies d'accès, plusieurs variantes générées puis comparées).

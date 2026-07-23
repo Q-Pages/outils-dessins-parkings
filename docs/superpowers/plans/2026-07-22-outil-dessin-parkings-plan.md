@@ -1846,6 +1846,17 @@ export default function App() {
       return;
     }
 
+    const exclusionPolygons = exclusions.map((exclusionRing) =>
+      turfPolygon([[...exclusionRing, exclusionRing[0]].map((p) => [p.lng, p.lat])])
+    );
+    const accessPointsInExclusion = accessPoints.filter((p) =>
+      exclusionPolygons.some((exclusionPolygon) => booleanPointInPolygon(turfPoint([p.lng, p.lat]), exclusionPolygon))
+    );
+    if (accessPointsInExclusion.length > 0) {
+      alert(`${accessPointsInExclusion.length} point(s) d'accès sont à l'intérieur d'une zone d'exclusion — déplace-les avant de générer un plan.`);
+      return;
+    }
+
     const localBoundary = boundary.map((p) => projection.toLocal(p));
     const localExclusions = exclusions.map((ring) => ring.map((p) => projection.toLocal(p)));
     const localAccessPoints = accessPoints.map((p) => projection.toLocal(p));
@@ -1975,6 +1986,7 @@ Run: `npm run dev`
 8. Tracer volontairement un contour en croix (auto-intersectant) et cliquer "Générer le plan" → vérifier le message d'erreur bloquant plutôt qu'un plan vide.
 9. Poser un point d'accès en dehors du contour et cliquer "Générer le plan" → vérifier le message d'erreur demandant de le repositionner.
 10. Vider un champ de paramètre (ex. largeur de voie) et cliquer "Générer le plan" → vérifier le message d'erreur nommant le paramètre invalide plutôt qu'un résultat vide silencieux.
+11. Poser un point d'accès à l'intérieur d'une zone d'exclusion et cliquer "Générer le plan" → vérifier le message d'erreur demandant de le repositionner (ajouté suite à la revue finale : le contrôle initial ne vérifiait que le contour, pas les exclusions).
 
 - [ ] **Step 4: Commit**
 
@@ -2073,5 +2085,6 @@ Une fois prêt à partager l'outil : créer un dépôt GitHub (public ou privé 
 
 - Remplacer Turf.js par Clipper2-WASM / straight-skeleton si des cas réels montrent des limites de précision géométrique.
 - Redimensionnement réel des places PMR (au lieu du simple retag de gabarit standard).
+- Rendre le ratio PMR configurable depuis l'interface (actuellement fixé à 2% en dur, non sérialisable — voir note de limitation V1 dans la spec section 4.2).
 - Solveur d'optimisation avancé (recherche combinatoire, algorithme génétique) en complément du balayage de configurations.
 - Calcul de puissance PV installable et estimation de production à partir du plan généré.
