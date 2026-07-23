@@ -70,6 +70,17 @@ export default function App() {
       return;
     }
 
+    const exclusionPolygons = exclusions.map((exclusionRing) =>
+      turfPolygon([[...exclusionRing, exclusionRing[0]].map((p) => [p.lng, p.lat])])
+    );
+    const accessPointsInExclusion = accessPoints.filter((p) =>
+      exclusionPolygons.some((exclusionPolygon) => booleanPointInPolygon(turfPoint([p.lng, p.lat]), exclusionPolygon))
+    );
+    if (accessPointsInExclusion.length > 0) {
+      alert(`${accessPointsInExclusion.length} point(s) d'accès sont à l'intérieur d'une zone d'exclusion — déplace-les avant de générer un plan.`);
+      return;
+    }
+
     const localBoundary = boundary.map((p) => projection.toLocal(p));
     const localExclusions = exclusions.map((ring) => ring.map((p) => projection.toLocal(p)));
     const localAccessPoints = accessPoints.map((p) => projection.toLocal(p));
