@@ -22,4 +22,12 @@ describe('projectFile', () => {
   it('throws a clear error on invalid JSON', () => {
     expect(() => deserializeProject('not json')).toThrow();
   });
+
+  it('throws a clear error when the JSON is well-formed but has the wrong shape (empty object)', () => {
+    expect(() => deserializeProject('{}')).toThrow();
+  });
+
+  it('throws a clear error when boundary is not an array', () => {
+    expect(() => deserializeProject(JSON.stringify({ boundary: 'not an array', exclusions: [], accessPoints: [], params: DEFAULT_SOLVER_PARAMS }))).toThrow();
+  });
 });

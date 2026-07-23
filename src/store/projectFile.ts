@@ -30,7 +30,21 @@ export function serializeProject(project: ProjectData): string {
 }
 
 export function deserializeProject(json: string): ProjectData {
-  const parsed = JSON.parse(json) as SerializedProject;
+  const parsed = JSON.parse(json) as Partial<SerializedProject>;
+
+  if (!Array.isArray(parsed.boundary)) {
+    throw new Error('Fichier de projet invalide : "boundary" est manquant ou n\'est pas un tableau.');
+  }
+  if (!Array.isArray(parsed.exclusions)) {
+    throw new Error('Fichier de projet invalide : "exclusions" est manquant ou n\'est pas un tableau.');
+  }
+  if (!Array.isArray(parsed.accessPoints)) {
+    throw new Error('Fichier de projet invalide : "accessPoints" est manquant ou n\'est pas un tableau.');
+  }
+  if (!parsed.params || typeof parsed.params.standardStallWidth !== 'number') {
+    throw new Error('Fichier de projet invalide : "params" est manquant ou incomplet.');
+  }
+
   return {
     boundary: parsed.boundary,
     exclusions: parsed.exclusions,
