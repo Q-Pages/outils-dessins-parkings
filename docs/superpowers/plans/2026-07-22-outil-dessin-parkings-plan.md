@@ -1403,6 +1403,12 @@ export function exportConfigToDxf(config: ParkingConfig, boundary: Point[], excl
 Run: `npx vitest run src/export/dxfExporter.test.ts`
 Expected: PASS (2 tests) — si `dxf-writer` n'expose pas exactement cette API (`addLayer`, `setActiveLayer`, `drawPolyline`, `Drawing.ACI`, `toDxfString`), consulter `node_modules/dxf-writer/README.md` et adapter les noms de méthodes en conséquence ; la structure des calques (CONTOUR, EXCLUSIONS, PLACES, PLACES_PMR, VOIES) doit être conservée telle quelle.
 
+**Correction post-revue de code :** le fichier DXF généré ne déclare aucune unité (`INSUNITS` reste "Unitless" par défaut dans `dxf-writer`), alors que les coordonnées de l'app sont en mètres — un fichier sans unité déclarée peut être mal interprété/mis à l'échelle une fois réouvert dans AutoCAD. Inspecter `node_modules/dxf-writer` (README et/ou code source) pour trouver la méthode permettant de déclarer les unités en mètres (ex. `d.setUnits(...)`, potentiellement avec une constante `Drawing.UNITS.Meters` ou équivalent — le nom exact dépend de l'API réelle de la librairie, à vérifier plutôt qu'à deviner), et l'appeler juste après `new Drawing()`. Ajouter un test qui vérifie que le DXF produit contient bien la déclaration d'unité attendue (chercher la valeur `$INSUNITS` correspondant aux mètres dans la sortie, ou toute autre preuve textuelle appropriée selon ce que la librairie génère réellement).
+
+Ajouter aussi ces deux tests manquants à `src/export/dxfExporter.test.ts` :
+1. Un test avec une zone d'exclusion non vide, vérifiant que son tracé apparaît bien dans le DXF sur le calque `EXCLUSIONS` (actuellement seul le cas `exclusions: []` est testé).
+2. Un test vérifiant que la place standard (`s1`, `isPmr: false`) est bien dessinée sur le calque `PLACES` et la place PMR (`s2`, `isPmr: true`) bien sur `PLACES_PMR` — pas seulement que les deux noms de calque apparaissent quelque part dans le fichier (ce que le test actuel prouve), mais que chaque entité est bien rattachée au bon calque. Inspecter la sortie réelle de `d.toDxfString()` pour connaître le format exact du code de groupe DXF 8 (nom du calque d'une entité) et écrire une assertion fiable sur cette base plutôt que de deviner le format.
+
 - [ ] **Step 5: Commit**
 
 ```bash
