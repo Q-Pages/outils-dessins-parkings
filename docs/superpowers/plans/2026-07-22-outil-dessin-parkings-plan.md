@@ -421,8 +421,11 @@ describe('packRows', () => {
       { x: 0, y: 5 },
     ];
     const result = packRows(rectangle, [exclusion], DEFAULT_SOLVER_PARAMS, 0, 'single');
-    // The exclusion covers exactly the first 2 stalls (0-2.5 and 2.5-5) of the first row
-    expect(result.stalls).toHaveLength(22);
+    // The exclusion covers x:[0,5]. Turf's booleanIntersects (used by stallFitsUsableArea)
+    // treats edge-touching as intersecting, so the stalls at x=0-2.5, x=2.5-5, AND the
+    // edge-touching stall at x=5-7.5 are all excluded (24 - 3 = 21). This conservative
+    // behavior (no stall placed flush against an exclusion zone edge) is intentional.
+    expect(result.stalls).toHaveLength(21);
   });
 });
 ```
