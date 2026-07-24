@@ -661,6 +661,8 @@ Corrige le bug identifié pendant la session : `assignPmrStalls` (`src/geometry/
 
 - [ ] **Step 1: Modifier la mise en page**
 
+**Correction post-implémentation :** la première version de `.side-panel` (`width: 100%` + `padding: 1rem`, sans `box-sizing: border-box`) débordait de la page — le `padding` s'ajoutait à la largeur `100%` au lieu d'être inclus dedans (comportement par défaut `box-sizing: content-box`), recréant un débordement horizontal similaire au bug `#root`/`index.css` déjà corrigé plus tôt dans ce projet. `box-sizing: border-box` est ajouté ci-dessous pour l'éviter.
+
 Remplacer entièrement les règles `.app-layout`, `.map-container` et `.side-panel` dans `src/App.css` par :
 
 ```css
@@ -678,6 +680,7 @@ Remplacer entièrement les règles `.app-layout`, `.map-container` et `.side-pan
 }
 
 .side-panel {
+  box-sizing: border-box;
   width: 100%;
   height: 280px;
   padding: 1rem;
