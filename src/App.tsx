@@ -55,6 +55,11 @@ export default function App() {
       return;
     }
 
+    if (accessPoints.length === 0) {
+      alert("Pose au moins un point d'accès avant de générer un plan — nécessaire pour placer les places PMR et raccorder les voies.");
+      return;
+    }
+
     const ring = [...boundary, boundary[0]].map((p) => [p.lng, p.lat]);
     const kinksResult = kinks(turfPolygon([ring]));
     if (kinksResult.features.length > 0) {
